@@ -242,6 +242,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pandasai.llm.google_gemini import GoogleGemini
 from pandasai import SmartDataframe
+import os
+import time
+import shutil
 
 # Function to make API request to Gemini
 def gemini_request(prompt, api_key):
@@ -256,8 +259,27 @@ def get_numerical_categorical_columns(df):
     categorical_columns = df.select_dtypes(include=['object']).columns.tolist()
     return numerical_columns, categorical_columns
 
+def get_image_path(directory):
+
+    # List all files in the directory
+    files = os.listdir(directory)
+
+    # Filter out only image files (e.g., .png, .jpg, .jpeg, .gif)
+    image_files = [f for f in files if f.endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+
+    # Get the first image file path if it exists
+    if image_files:
+        first_image_path = os.path.join(directory, image_files[0])
+        return first_image_path
+    else:
+        st.warning("No image files found in the directory.")
+        return None
+
+
+
 # Streamlit app
 st.title("Data Analysis and Visualization App")
+
 
 # File uploader
 uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -358,11 +380,24 @@ if uploaded_file is not None:
                         
                         # Use PandasAI to generate the visualization
                         gemini_llm = GoogleGemini(api_key=api_key)
-                        smart_filter_df = SmartDataframe(filtered_df, config={"llm": gemini_llm})
+                        smart_filter_df = SmartDataframe(filtered_df, config={"llm": gemini_llm, "open_charts" : False})
                         
                         try:
-                            fig = smart_filter_df.chat(visualization_recommendation)
-                            st.pyplot(fig)
+                            smart_filter_df.chat(visualization_recommendation)
+                            directory = 'exports/charts'
+                            # Wait for the chart to be saved, checking every second for up to 20 seconds
+                            timeout = 20  
+                            start_time = time.time()
+                            
+                            while not os.path.exists(directory) and (time.time() - start_time )< timeout:
+                                time.sleep(1)
+
+                            image_path = get_image_path(directory)    
+                            if image_path:
+                                st.image(image_path)
+                            else:
+                                st.warning("The chart file was not found.")
+                            shutil.rmtree(directory)
                         except Exception as e:
                             st.error(f"Error generating visualization: {str(e)}")
                     else:
